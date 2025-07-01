@@ -83,8 +83,8 @@ const PlayersPage = () => {
 
       // 2. Fetch both players and games concurrently for efficiency
       const [playerResponse, gamesResponse] = await Promise.all([
-        fetch('http://localhost:5000/api/get_players'),
-        fetch(`http://localhost:5000/api/player-games?startDate=${startDate}&endDate=${endDate}`)
+        fetch('http://localhost:10000/api/get_players'),
+        fetch(`http://localhost:10000/api/player-games?startDate=${startDate}&endDate=${endDate}`)
       ]);
 
       if (!playerResponse.ok) throw new Error('Failed to fetch player list from the server.');

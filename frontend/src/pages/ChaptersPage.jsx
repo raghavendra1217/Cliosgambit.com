@@ -46,7 +46,7 @@ function ChaptersPage() {
   useEffect(() => {
     const fetchChapters = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/modules/${moduleId}/chapters`);
+        const res = await fetch(`http://localhost:10000/api/modules/${moduleId}/chapters`);
         if (!res.ok) throw new Error('Error fetching chapters');
         const data = await res.json();
         setChapters(data);

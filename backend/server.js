@@ -14,7 +14,7 @@ const { killProcessOnPort } = require('./api/utils/portKiller');
 const db = require('./api/config/database');
 
 // --- 2. CONFIGURATION & INITIALIZATION ---
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 const app = express();
 const frontendBuildPath = path.join(__dirname, '../frontend/build');
 

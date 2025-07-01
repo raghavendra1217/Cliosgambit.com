@@ -20,7 +20,7 @@ function StoriesPage() {
   const cardBorderColor = useColorModeValue('gray.200', 'gray.600');  // ✅ FIXED
 
   useEffect(() => {
-    axios.get(`http://localhost:5000/api/chapters/${chapterId}/stories`)
+    axios.get(`http://localhost:10000/api/chapters/${chapterId}/stories`)
       .then(response => {
         setStories(response.data);
         setLoading(false);
