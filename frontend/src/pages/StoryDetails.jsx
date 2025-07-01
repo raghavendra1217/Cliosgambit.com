@@ -20,7 +20,7 @@ function StoryDetails() {
   const mappingBg = useColorModeValue('gray.100', 'gray.600');  // ✅ FIXED → added this for mapping box bg
 
   useEffect(() => {
-    axios.get(`http://localhost:10000/api/stories/${storyId}`)
+    axios.get(`/api/stories/${storyId}`)
       .then(response => {
         setStory(response.data);
       })
@@ -28,7 +28,7 @@ function StoryDetails() {
         console.error('Error fetching story info:', error);
       });
 
-    axios.get(`http://localhost:10000/api/story-mappings/${storyId}`)
+    axios.get(`/api/story-mappings/${storyId}`)
       .then(response => {
         setMappings(response.data);
         setLoading(false);

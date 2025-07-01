@@ -110,22 +110,22 @@ function MappingDetails() {
         const fetchData = async () => {
             try {
                 // These API calls remain as they fetch data from your application's database
-                const storyRes = await axios.get(`http://localhost:10000/api/stories/${storyId}`);
+                const storyRes = await axios.get(`/api/stories/${storyId}`);
                 setStory(storyRes.data);
-                const mappingRes = await axios.get(`http://localhost:10000/api/story-mappings/${storyId}`);
+                const mappingRes = await axios.get(`/api/story-mappings/${storyId}`);
                 const foundMapping = mappingRes.data.find(m => m.mapping_id.toString() === mappingId.toString());
                 if (!foundMapping) throw new Error("Mapping not found");
                 setMapping(foundMapping);
                 const principleId = foundMapping.principle_id;
                 if (principleId) {
-                    const principleRes = await axios.get(`http://localhost:10000/api/principle/${principleId}`);
+                    const principleRes = await axios.get(`/api/principle/${principleId}`);
                     setPrinciple(principleRes.data);
                     if (principleRes.data.fen_with_move) {
                         setOriginalFen(principleRes.data.fen_with_move);
                         setCurrentFen(principleRes.data.fen_with_move);
                         setActiveSource({ type: 'original_pos', id: 'original_pos', fen: principleRes.data.fen_with_move });
                     }
-                    const ratedPuzzlesRes = await axios.get(`http://localhost:10000/api/3000-rated-puzzles/${principleId}`);
+                    const ratedPuzzlesRes = await axios.get(`/api/3000-rated-puzzles/${principleId}`);
                     setFetchedRatedPuzzles(ratedPuzzlesRes.data.filter(rp => rp && rp.Fen) || []);
                 }
             } catch (err) {
@@ -163,12 +163,12 @@ function MappingDetails() {
         setIsPuzzleLoading(true); setPuzzleAnswer(''); setShowOriginalSolution(false);
         setRatedPuzzleSolutionLine([]); setShowRatedSolution(false);
         try {
-            const fenRes = await axios.get(`http://localhost:10000/api/puzzles/${puzzleId}`);
+            const fenRes = await axios.get(`/api/puzzles/${puzzleId}`);
             const puzzleFen = fenRes.data?.fen_with_move;
             if (!puzzleFen) throw new Error(`Puzzle ${puzzleId} has no FEN.`);
             setCurrentFen(puzzleFen);
             setActiveSource({ type: 'original_puzzle', id: puzzleId, fen: puzzleFen });
-            const answerRes = await axios.get(`http://localhost:10000/api/puzzle-answer/${puzzleId}`);
+            const answerRes = await axios.get(`/api/puzzle-answer/${puzzleId}`);
             setPuzzleAnswer(answerRes.data.answer || "No answer available.");
         } catch (err) {
             toast({ title: "Error Loading Puzzle", description: err.message, status: 'error' });
