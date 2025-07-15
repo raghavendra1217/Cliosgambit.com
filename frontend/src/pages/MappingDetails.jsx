@@ -2,14 +2,16 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
     Box, Heading, Text, Spinner, Flex,
     Button, Wrap, WrapItem, useToast, useColorModeValue,
-    Progress
+    Progress,
+    Stack, // Added for responsive layout
+    useBreakpointValue // Added for conditional rendering
 } from '@chakra-ui/react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Chess } from 'chess.js';
 import ChessGame from './ChessGame';
 
-// --- [CORRECTED] Helper to get a sequence of moves from the online Stockfish API ---
+// --- [UNCHANGED] Helper to get a sequence of moves from the online Stockfish API ---
 const fetchPuzzleSolution = async (initialFen, depth, ply) => {
     console.log(`[MappingDetails] Fetching online puzzle solution (Depth: ${depth}, Ply: ${ply})`);
     const solutionMoves = [];
@@ -64,7 +66,7 @@ const fetchPuzzleSolution = async (initialFen, depth, ply) => {
 
 
 function MappingDetails() {
-    // --- State Hooks ---
+    // --- State Hooks (Unchanged) ---
     const { storyId, mappingId } = useParams();
     const [story, setStory] = useState(null);
     const [mapping, setMapping] = useState(null);
@@ -85,7 +87,11 @@ function MappingDetails() {
     const [currentFetchingFen, setCurrentFetchingFen] = useState(null);
     const [aiConfig, setAiConfig] = useState({ maxDepth: 10, minDepth: 5 });
 
-    // --- UI Styling ---
+    // --- [NEW] Responsive Hook ---
+    // Use 'lg' breakpoint to give the two-column layout more space
+    const isMobile = useBreakpointValue({ base: true, lg: false });
+
+    // --- UI Styling (Unchanged) ---
     const bgBox = useColorModeValue("blue.50", "blue.900");
     const textColor = useColorModeValue("gray.700", "gray.300");
     const gmButtonBg = useColorModeValue("yellow.400", "yellow.600");
@@ -104,7 +110,7 @@ function MappingDetails() {
     const activeButtonColor = "white";
     const activeButtonBorder = useColorModeValue("teal.500", "teal.400");
 
-    // --- Data Fetching and State Management ---
+    // --- Data Fetching and State Management (Unchanged) ---
     useEffect(() => {
         setLoading(true); setError(null);
         const fetchData = async () => {
@@ -144,6 +150,7 @@ function MappingDetails() {
         setAiConfig(newConfig);
     }, [activeSource]);
 
+    // --- Helper Functions and Handlers (Unchanged) ---
     const getCleanedPuzzleArray = (str) => {
         if (!str || typeof str !== 'string') return [];
         return str.trim().replace(/^\[|\]$/g, '').replace(/'/g, '').split(',').map(p => p.trim()).filter(Boolean);
@@ -176,7 +183,6 @@ function MappingDetails() {
         } finally { setIsPuzzleLoading(false); }
     };
 
-    // --- [REFACTORED] GM Analysis function to use the corrected online API helper ---
     const fetchBestMoveSequence = useCallback(async (initialRatedFen) => {
         if (!initialRatedFen || currentFetchingFen === initialRatedFen) return;
         setIsFetchingRatedSolution(true);
@@ -224,79 +230,128 @@ function MappingDetails() {
 
     if (loading) return <Box p={8} textAlign="center"><Spinner size="xl" /></Box>;
     if (error && !story) return <Box p={8} textAlign="center" color="red.500"><Heading size="md">Error</Heading><Text>{error}</Text></Box>;
+    
+    // --- [NEW] Reusable UI Blocks ---
+    const StoryHeader = (
+        <Box>
+            {story && <Heading mb={3} size={{ base: 'lg', md: 'xl' }}>{story.title}</Heading>}
+            {story && <Text fontSize={{ base: 'md', md: 'lg' }} color="gray.500" mb={6}>{story.description}</Text>}
+        </Box>
+    );
+
+    const InfoAndPrincipleBoxes = (
+        <>
+            {mapping && (<Box p={4} bg={bgBox} borderRadius="md" mb={6}><Heading size="sm" mb={2} color="blue.700">Story Message</Heading><Text color={textColor}>{mapping.story_text}</Text></Box>)}
+            {principle && (<Box p={4} bg={bgBox} borderRadius="md" mb={6}><Heading size="sm" mb={2} color="blue.700">Principle</Heading><Text color={textColor}>{principle.principle}</Text></Box>)}
+        </>
+    );
+
+    const PuzzleControls = (
+        <Box p={4} bg={bgBox} borderRadius="md" mb={6}>
+            <Heading size="xs" mb={3} textTransform="uppercase" color="blue.600">Positions & Puzzles</Heading>
+            <Wrap spacing={3}>
+                {originalFen && (
+                    <WrapItem>
+                        <Button size="sm" bg={activeSource.type === 'original_pos' ? activeButtonBg : normalButtonBg} color={activeSource.type === 'original_pos' ? activeButtonColor : normalButtonColor} borderColor={activeSource.type === 'original_pos' ? activeButtonBorder : normalButtonBorder} borderWidth="1px" _hover={{ bg: activeSource.type === 'original_pos' ? activeButtonBg : normalButtonHoverBg }} onClick={handleOriginalPositionClick}>Position</Button>
+                    </WrapItem>
+                )}
+                {originalPuzzleIdsFromPrinciple.map((puzzleId, index) => (
+                    <WrapItem key={`original-${puzzleId}`}>
+                        <Button size="sm" bg={activeSource.id === puzzleId ? activeButtonBg : normalButtonBg} color={activeSource.id === puzzleId ? activeButtonColor : normalButtonColor} borderColor={activeSource.id === puzzleId ? activeButtonBorder : normalButtonBorder} borderWidth="1px" _hover={{ bg: activeSource.id === puzzleId ? activeButtonBg : normalButtonHoverBg }} onClick={() => handleOriginalPuzzleClick(puzzleId)} isLoading={isPuzzleLoading && activeSource.id === puzzleId} isDisabled={isPuzzleLoading}>
+                            {index + 1}
+                        </Button>
+                    </WrapItem>
+                ))}
+                {fetchedRatedPuzzles.map((ratedPuzzle, index) => {
+                    const ratedPuzzleId = `rated-${index}-${ratedPuzzle.Fen?.substring(0,10)}`;
+                    const isActive = activeSource.id === ratedPuzzleId;
+                    return (
+                        <WrapItem key={`rated-${index}`}>
+                                                        <Button size="sm" bg={isActive ? activeGmButtonBg : gmButtonBg} color={isActive ? activeGmButtonColor : gmButtonColor} borderColor={isActive ? activeGmButtonBorder : gmButtonBorder} borderWidth="1px" boxShadow={isActive ? activeGmButtonBoxShadow : "none"} _hover={{ bg: gmButtonHoverBg, boxShadow: isActive ? activeGmButtonBoxShadow : "md" }} onClick={() => handleRatedPuzzleClick(ratedPuzzle, index)}>
+                                GM-{index + 1}
+                            </Button>
+                        </WrapItem>
+                    );
+                })}
+            </Wrap>
+        </Box>
+    );
+
+
+    const SolutionBoxes = (
+        <Box mt={4}> {/* Added margin-top to space it from the board in mobile view */}
+            {activeSource.type === 'original_puzzle' && puzzleAnswer && (
+                <Box p={4} bg="green.50" borderRadius="md" mb={4}>
+                    <Heading size="sm" mb={3} color="green.700">Puzzle Solution</Heading>
+                    {!showOriginalSolution ? (<Button size="sm" colorScheme="teal" onClick={() => setShowOriginalSolution(true)}>Show Solution</Button>)
+                        : (<Text mt={3} color="green.800" whiteSpace="pre-wrap">{puzzleAnswer}</Text>)}
+                </Box>
+            )}
+            {activeSource.type === 'rated_puzzle' && (
+                <Box p={4} bg="purple.50" borderRadius="md" mb={4}>
+                    <Heading size="sm" mb={3} color="purple.700">GM Position Analysis</Heading>
+                    {isFetchingRatedSolution && (<Flex direction="column" align="center"><Spinner color="purple.500" mb={2}/><Text fontSize="sm" color="purple.600">Analyzing...</Text><Progress size="xs" isIndeterminate colorScheme="purple" width="80%" mt={1} /></Flex>)}
+                    {!isFetchingRatedSolution && ratedPuzzleSolutionLine.length > 0 && (
+                        <>
+                            {!showRatedSolution ? (<Button size="sm" colorScheme="purple" onClick={() => setShowRatedSolution(true)}>Show Analysis</Button>)
+                                : (<Text mt={3} color="purple.800" whiteSpace="pre-wrap">{ratedPuzzleSolutionLine.map((move, idx) => (<React.Fragment key={idx}>{idx > 0 && (idx % 2 === 0 ? <br /> : " ")}{idx % 2 === 0 && `${Math.floor(idx/2) + 1}. `}{move}</React.Fragment>))}</Text>)}
+                        </>
+                    )}
+                    {!isFetchingRatedSolution && ratedPuzzleSolutionLine.length === 0 && activeSource.fen && (
+                         <Text fontSize="sm" color="purple.600">Analysis not started or no moves found.</Text>
+                    )}
+                </Box>
+            )}
+        </Box>
+    );
+    
+    const ChessboardDisplay = (
+        // Responsive width and auto margin for centering on mobile
+        <Box w={{ base: "90%", lg: "100%" }} mx={{ base: "auto", lg: "0" }}>
+            {isPuzzleLoading ?
+                // Adjusted min-height for mobile
+                (<Flex minH={{base: "320px", md:"480px"}} align="center" justify="center" bg="gray.100" borderRadius="md"><Spinner size="xl" /></Flex>)
+                : currentFen ? (
+                    <ChessGame 
+                        key={`${activeSource.type}-${activeSource.id}-${currentFen}`} 
+                        initialFen={currentFen} 
+                        maxDepth={aiConfig.maxDepth}
+                        minDepth={aiConfig.minDepth}
+                    />
+                )
+                : (<Flex minH={{base: "320px", md:"480px"}} align="center" justify="center" bg="gray.100" borderRadius="md"><Text color="gray.500">Select a position</Text></Flex>)
+            }
+        </Box>
+    );
 
     return (
-        <Box px={{ base: 4, md: 10 }} py={8} maxW="100%" mx="auto">
-            <Flex direction={{ base: 'column', md: 'row' }} gap={10} align="flex-start">
-                <Box flex={{ base: "1", md: "1.2" }}>
-                    {story && <Heading mb={3}>{story.title}</Heading>}
-                    {story && <Text fontSize="lg" color="gray.500" mb={6}>{story.description}</Text>}
-                    {mapping && (<Box p={4} bg={bgBox} borderRadius="md" mb={6}><Heading size="sm" mb={2} color="blue.700">Story Message</Heading><Text color={textColor}>{mapping.story_text}</Text></Box>)}
-                    {principle && (<Box p={4} bg={bgBox} borderRadius="md" mb={6}><Heading size="sm" mb={2} color="blue.700">Principle</Heading><Text color={textColor}>{principle.principle}</Text></Box>)}
-                    <Box p={4} bg={bgBox} borderRadius="md" mb={6}>
-                        <Heading size="xs" mb={3} textTransform="uppercase" color="blue.600">Positions & Puzzles</Heading>
-                        <Wrap spacing={3}>
-                            {originalFen && (
-                                <WrapItem>
-                                    <Button size="sm" bg={activeSource.type === 'original_pos' ? activeButtonBg : normalButtonBg} color={activeSource.type === 'original_pos' ? activeButtonColor : normalButtonColor} borderColor={activeSource.type === 'original_pos' ? activeButtonBorder : normalButtonBorder} borderWidth="1px" _hover={{ bg: activeSource.type === 'original_pos' ? activeButtonBg : normalButtonHoverBg }} onClick={handleOriginalPositionClick}>Position</Button>
-                                </WrapItem>
-                            )}
-                            {originalPuzzleIdsFromPrinciple.map((puzzleId, index) => (
-                                <WrapItem key={`original-${puzzleId}`}>
-                                    <Button size="sm" bg={activeSource.id === puzzleId ? activeButtonBg : normalButtonBg} color={activeSource.id === puzzleId ? activeButtonColor : normalButtonColor} borderColor={activeSource.id === puzzleId ? activeButtonBorder : normalButtonBorder} borderWidth="1px" _hover={{ bg: activeSource.id === puzzleId ? activeButtonBg : normalButtonHoverBg }} onClick={() => handleOriginalPuzzleClick(puzzleId)} isLoading={isPuzzleLoading && activeSource.id === puzzleId} isDisabled={isPuzzleLoading}>
-                                        {index + 1}
-                                    </Button>
-                                </WrapItem>
-                            ))}
-                            {fetchedRatedPuzzles.map((ratedPuzzle, index) => {
-                                const ratedPuzzleId = `rated-${index}-${ratedPuzzle.Fen?.substring(0,10)}`;
-                                const isActive = activeSource.id === ratedPuzzleId;
-                                return (
-                                    <WrapItem key={`rated-${index}`}>
-                                        <Button size="sm" bg={isActive ? activeGmButtonBg : gmButtonBg} color={isActive ? activeGmButtonColor : gmButtonColor} borderColor={isActive ? activeGmButtonBorder : gmButtonBorder} borderWidth="1px" boxShadow={isActive ? activeGmButtonBoxShadow : "none"} _hover={{ bg: gmButtonHoverBg, boxShadow: isActive ? activeGmButtonBoxShadow : "md" }} onClick={() => handleRatedPuzzleClick(ratedPuzzle, index)}>
-                                            GM-{index + 1}
-                                        </Button>
-                                    </WrapItem>
-                                );
-                            })}
-                        </Wrap>
+        // UPDATED: Main container now fills screen width. Padding adjusted for mobile.
+        <Box px={{ base: 3, md: 8 }} py={8}>
+            {isMobile ? (
+                // --- NEW MOBILE LAYOUT ---
+                // Reordered to place chessboard and solutions at the end.
+                <Stack spacing={6}>
+                    {StoryHeader}
+                    {InfoAndPrincipleBoxes}
+                    {PuzzleControls}
+                    {ChessboardDisplay}
+                    {SolutionBoxes}
+                </Stack>
+            ) : (
+                // --- DESKTOP LAYOUT ---
+                // Added a maxW and mx="auto" here to control width on large screens
+                <Flex direction="row" gap={10} align="flex-start" maxW="1600px" mx="auto">
+                    <Box flex={{ base: "1", lg: "1.2" }} maxW={{lg: "600px"}}>
+                        {StoryHeader}
+                        {InfoAndPrincipleBoxes}
+                        {PuzzleControls}
+                        {SolutionBoxes}
                     </Box>
-
-                    {activeSource.type === 'original_puzzle' && puzzleAnswer && (
-                        <Box p={4} bg="green.50" borderRadius="md" mb={4}>
-                            <Heading size="sm" mb={3} color="green.700">Puzzle Solution</Heading>
-                            {!showOriginalSolution ? (<Button size="sm" colorScheme="teal" onClick={() => setShowOriginalSolution(true)}>Show Solution</Button>)
-                                : (<Text mt={3} color="green.800" whiteSpace="pre-wrap">{puzzleAnswer}</Text>)}
-                        </Box>
-                    )}
-                    {activeSource.type === 'rated_puzzle' && (
-                        <Box p={4} bg="purple.50" borderRadius="md" mb={4}>
-                            <Heading size="sm" mb={3} color="purple.700">GM Position Analysis</Heading>
-                            {isFetchingRatedSolution && (<Flex direction="column" align="center"><Spinner color="purple.500" mb={2}/><Text fontSize="sm" color="purple.600">Analyzing...</Text><Progress size="xs" isIndeterminate colorScheme="purple" width="80%" mt={1} /></Flex>)}
-                            {!isFetchingRatedSolution && ratedPuzzleSolutionLine.length > 0 && (
-                                <>
-                                    {!showRatedSolution ? (<Button size="sm" colorScheme="purple" onClick={() => setShowRatedSolution(true)}>Show Analysis</Button>)
-                                        : (<Text mt={3} color="purple.800" whiteSpace="pre-wrap">{ratedPuzzleSolutionLine.map((move, idx) => (<React.Fragment key={idx}>{idx > 0 && (idx % 2 === 0 ? <br /> : " ")}{idx % 2 === 0 && `${Math.floor(idx/2) + 1}. `}{move}</React.Fragment>))}</Text>)}
-                                </>
-                            )}
-                        </Box>
-                    )}
-                </Box>
-                <Box flex={{ base: "1", md: "1.5" }}>
-                    {isPuzzleLoading ?
-                        (<Flex height="700px" align="center" justify="center" bg="gray.100" borderRadius="md"><Spinner size="xl" /></Flex>)
-                        : currentFen ? (
-                            <ChessGame 
-                                key={`${activeSource.type}-${activeSource.id}-${currentFen}`} 
-                                initialFen={currentFen} 
-                                maxDepth={aiConfig.maxDepth}
-                                minDepth={aiConfig.minDepth}
-                            />
-                        )
-                        : (<Flex height="700px" align="center" justify="center" bg="gray.100" borderRadius="md"><Text color="gray.500">Select a position</Text></Flex>)
-                    }
-                </Box>
-            </Flex>
+                    <Box flex={{ base: "1", lg: "1.5" }} position="sticky" top="80px">
+                        {ChessboardDisplay}
+                    </Box>
+                </Flex>
+            )}
         </Box>
     );
 }

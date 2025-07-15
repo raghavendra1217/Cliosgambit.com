@@ -66,6 +66,20 @@ function ChaptersPage() {
     fetchChapters();
   }, [moduleId, toast]);
 
+  const handleChapterClick = (chapter, isUnlocked) => {
+    if (isUnlocked) {
+      navigate(`/api/stories/${chapter.chapter_id}`);
+    } else {
+      toast({
+        title: 'Chapter Locked',
+        description: 'This chapter is not yet unlocked.',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   return (
     <Box p={8}>
       <Heading mb={10} textAlign="center" mt="10">Chapters for Module {moduleId.replace(/\D/g, '')}</Heading>
@@ -82,6 +96,9 @@ function ChaptersPage() {
             const darkColor = colorMode === 'light' ? theme.lightMode.darkSq : theme.darkMode.darkSq;
             const textColor = colorMode === 'light' ? theme.lightMode.text : theme.darkMode.text;
 
+            // *** CHANGE HERE: Check if the chapter_id is the string 'chap1' ***
+            const isUnlocked = chapter.chapter_id === 'CHAP1';
+
             return (
               <Box
                 key={chapter.chapter_id}
@@ -91,13 +108,18 @@ function ChaptersPage() {
                 borderRadius="lg"
                 height="250"
                 boxShadow="md"
-                transition="transform 0.3s ease, box-shadow 0.3s ease"
-                _hover={{
-                  transform: 'scale(1.05) rotate(2deg)',
-                  boxShadow: 'xl',
-                  cursor: 'pointer',
-                }}
-                onClick={() => navigate(`/api/stories/${chapter.chapter_id}`)}
+                opacity={isUnlocked ? 1 : 0.6} // Visually dim locked chapters
+                cursor={isUnlocked ? 'pointer' : 'not-allowed'} // Change cursor for locked chapters
+                transition="transform 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease"
+                _hover={
+                  isUnlocked
+                    ? {
+                        transform: 'scale(1.05) rotate(2deg)',
+                        boxShadow: 'xl',
+                      }
+                    : {} // No hover effect for locked chapters
+                }
+                onClick={() => handleChapterClick(chapter, isUnlocked)}
               >
                 <Heading size="md" mb={2}>
                   {chapter.chapter_id}

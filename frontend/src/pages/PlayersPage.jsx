@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Text,
@@ -6,283 +6,352 @@ import {
   Center,
   Alert,
   AlertIcon,
-  Grid,
-  GridItem,
-  Tooltip,
-  Flex,
   VStack,
+  Select,
+  Grid,
+  Heading,
+  useColorModeValue,
+  Tooltip,
+  HStack,
+  Flex,
 } from '@chakra-ui/react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Dot } from 'recharts';
+import { BsCircleFill } from 'react-icons/bs';
 
-// --- Helper Functions ---
+// --- Reusable Sub-Components ---
 
-/**
- * Determines the color for the activity square based on game count.
- * @param {number} count - The number of games played.
- * @returns {string} A color string for Chakra UI.
- */
-const getActivityColor = (count) => {
-  if (count <= 0) return 'gray.300';
-  if (count >= 1 && count <= 2) return 'green.200';
-  if (count >= 3 && count <= 5) return 'green.400';
-  if (count >= 6 && count <= 9) return 'green.600';
-  if (count >= 10) return 'green.800';
-  return 'gray.300';
+const RatingChart = ({ data, strokeColor, joiningDate }) => {
+    const tooltipBg = useColorModeValue('white', 'gray.800');
+    const tooltipBorder = useColorModeValue('gray.200', 'gray.600');
+    const gridStroke = useColorModeValue('gray.200', 'gray.700');
+    const MAX_PLOT_POINTS = 150;
+
+    const { chartData, joiningDateOnChart } = useMemo(() => {
+        if (!data || data.length === 0) return { chartData: [], joiningDateOnChart: null };
+        let processedData;
+        if (data.length <= MAX_PLOT_POINTS) {
+            processedData = data.map((game, index) => ({ ...game, gameNumber: index + 1 }));
+        } else {
+            const groupSize = Math.ceil(data.length / MAX_PLOT_POINTS);
+            processedData = [];
+            for (let i = 0; i < data.length; i += groupSize) {
+                const chunk = data.slice(i, i + groupSize);
+                const avgRating = Math.round(chunk.reduce((sum, g) => sum + g.rating, 0) / chunk.length);
+                processedData.push({ ...chunk[chunk.length-1], rating: avgRating, gameNumber: i + chunk.length });
+            }
+        }
+        let joiningDateLabel = null;
+        if (joiningDate) {
+            const joinTimestamp = new Date(joiningDate).getTime();
+            const joiningIndex = processedData.findIndex(g => new Date(g.date).getTime() >= joinTimestamp);
+            if (joiningIndex !== -1) {
+                processedData[joiningIndex].isJoiningPoint = true;
+                joiningDateLabel = new Date(processedData[joiningIndex].date).toLocaleDateString();
+            }
+        }
+        return { chartData: processedData, joiningDateOnChart: joiningDateLabel };
+    }, [data, joiningDate]);
+
+    const yAxisProps = useMemo(() => {
+        if (chartData.length === 0) return { domain: [0, 1500] };
+        let minRating = Infinity, maxRating = -Infinity;
+        chartData.forEach(p => { minRating = Math.min(minRating, p.rating); maxRating = Math.max(maxRating, p.rating); });
+        const domainMin = Math.floor((minRating - 50) / 50) * 50;
+        const domainMax = Math.ceil((maxRating + 50) / 50) * 50;
+        return { domain: [domainMin, domainMax] };
+    }, [chartData]);
+    
+    const renderJoiningDot = (props) => {
+        const { cx, cy, payload } = props;
+        if (payload.isJoiningPoint) {
+            return <Dot cx={cx} cy={cy} r={5} fill="orange.400" stroke="orange.400" />;
+        }
+        return null;
+    };
+
+    if (chartData.length === 0) {
+      return <Center h="250px"><Text>No data available for this category.</Text></Center>;
+    }
+
+    return (
+        <Box h="250px" position="relative">
+            <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 20, right: 15, left: -25, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                    <XAxis type="number" dataKey="gameNumber" domain={['dataMin', 'dataMax']} tick={{ fontSize: 10 }} />
+                    <YAxis domain={yAxisProps.domain} allowDecimals={false} tick={{ fontSize: 10 }} />
+                    <RechartsTooltip 
+                        contentStyle={{ backgroundColor: tooltipBg, border: `1px solid ${tooltipBorder}` }} 
+                        labelFormatter={(label) => `Game #${label}`}
+                        formatter={(value, name, props) => [value, `Rating on ${new Date(props.payload.date).toLocaleDateString()}`]}
+                    />
+                    <Line type="monotone" dataKey="rating" stroke={strokeColor} strokeWidth={2.5} dot={renderJoiningDot} activeDot={{ r: 7 }} name="Rating" />
+                </LineChart>
+            </ResponsiveContainer>
+            {joiningDateOnChart && (
+                <Flex align="center" position="absolute" top={0} right={2} fontSize="xs" color="gray.500">
+                    <Box as={BsCircleFill} color="orange.400" size="10px" mr={2}/>
+                    <Text>Joined: {joiningDateOnChart}</Text>
+                </Flex>
+            )}
+        </Box>
+    );
 };
 
-/**
- * Formats a Date object into a 'YYYY-MM-DD' string.
- * @param {Date} date - The date object to format.
- * @returns {string} The formatted date string.
- */
-const formatDate = (date) => {
-  return date.toISOString().split('T')[0];
+const StatItem = ({ label, value, valueColor = 'inherit' }) => {
+    const borderColor = useColorModeValue('gray.200', 'gray.700');
+    return (
+        <Flex w="100%" justify="space-between" align="baseline" borderBottom="1px dotted" borderColor={borderColor} pb={2}>
+            <Text fontSize="sm" color="gray.500">{label}</Text>
+            <Text fontSize="lg" fontWeight="bold" color={valueColor}>{value ?? 'N/A'}</Text>
+        </Flex>
+    );
 };
 
-/**
- * Generates an array of date strings for the last 30 days.
- * @returns {string[]} An array of dates from 30 days ago to today.
- */
-const getLast30Days = () => {
-  const dates = [];
-  const today = new Date();
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    dates.push(formatDate(date));
-  }
-  return dates.reverse(); // Return in chronological order (oldest to newest)
+const ImprovementStat = ({ label, value }) => {
+    const color = value > 0 ? 'green.500' : value < 0 ? 'red.500' : 'gray.500';
+    const displayValue = value !== null && !isNaN(value) ? `${value > 0 ? '+' : ''}${value}` : 'N/A';
+    return <StatItem label={label} value={displayValue} valueColor={color} />;
 };
 
+const Legend = ({ items }) => (
+    <HStack spacing={4} mt={3} justify="flex-end">
+      {items.map((item) => (
+        <HStack key={item.label} spacing={1.5} align="center">
+          <Box w="12px" h="12px" bg={item.color} borderRadius="sm" />
+          <Text fontSize="xs" color="gray.500">{item.label}</Text>
+        </HStack>
+      ))}
+    </HStack>
+);
 
-// --- The Main Component ---
+const LinearActivityTracker = ({ title, data, getColor, getTooltipLabel, LegendComponent }) => {
+    const today = new Date().toISOString().split('T')[0];
+
+    return (
+        <VStack align="stretch" spacing={2}>
+            <Heading as="h3" size="md">{title}</Heading>
+            <HStack spacing={1}>
+                {data.map(({ date, value }) => (
+                    <Tooltip key={date} label={getTooltipLabel(value, date)} placement="top" hasArrow>
+                        <Box
+                            flex="1" // Allows boxes to fill the space
+                            h={{ base: "16px", md: "20px" }}
+                            bg={getColor(value)}
+                            borderRadius="sm"
+                            transition="transform 0.1s ease-in-out"
+                            border={date === today ? "2px solid" : "none"}
+                            borderColor="blue.400"
+                            _hover={{ transform: 'scale(1.3)', zIndex: 1, boxShadow: 'lg' }}
+                        />
+                    </Tooltip>
+                ))}
+            </HStack>
+             <Flex justify="space-between">
+                <Text fontSize="xs" color="gray.500">30 days ago</Text>
+                <Text fontSize="xs" color="gray.500">Today</Text>
+            </Flex>
+            {LegendComponent && <LegendComponent />}
+        </VStack>
+    );
+};
+
+// --- The Main Page Component ---
 const PlayersPage = () => {
-  const [processedData, setProcessedData] = useState(null);
+  const [allPlayersData, setAllPlayersData] = useState([]);
+  const [selectedPlayerId, setSelectedPlayerId] = useState('');
+  const [liveStats, setLiveStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [hoveredPlayerId, setHoveredPlayerId] = useState(null);
-
-  // --- UI Layout Adjustments ---
-  const playerNameColumnWidth = "280px";
-  const activitySquareSize = "24px";
-  const gridColumnGap = "4px";
-  const gridRowGap = "10px";
-  const hoverBgColor = "blue.100";
-
-  /**
-   * Fetches player list and recent games, then processes them into a displayable format.
-   */
-  const fetchAndProcessData = async () => {
-    // Don't show spinner for background refreshes
-    if (!processedData) setLoading(true); 
-    setError(null);
-    try {
-      // 1. Define the date range for the last 30 days
-      const allDates = getLast30Days();
-      const startDate = allDates[0];
-      const endDate = allDates[allDates.length - 1];
-
-      // 2. Fetch both players and games concurrently for efficiency
-      const [playerResponse, gamesResponse] = await Promise.all([
-        fetch('/api/get_players'),
-        fetch(`/api/player-games?startDate=${startDate}&endDate=${endDate}`)
-      ]);
-
-      if (!playerResponse.ok) throw new Error('Failed to fetch player list from the server.');
-      if (!gamesResponse.ok) throw new Error('Failed to fetch player games from the server.');
-
-      const { players: playersList } = await playerResponse.json();
-      const { games: gameList } = await gamesResponse.json();
-
-      // 3. Process the raw data: Create a map for quick lookup.
-      // This is the key step to aggregate game counts per player per day.
-      // We convert all IDs to lowercase to handle case-sensitivity issues.
-      const activityMap = {};
-      for (const game of gameList) {
-        const chess_com_id_lower = game.chess_com_id.toLowerCase();
-        const { date } = game;
-        
-        if (!activityMap[chess_com_id_lower]) {
-          activityMap[chess_com_id_lower] = {};
-        }
-        activityMap[chess_com_id_lower][date] = (activityMap[chess_com_id_lower][date] || 0) + 1;
-      }
-      
-      // 4. Combine the player list with the processed activity data.
-      const finalPlayersData = playersList.map(player => {
-        // Use lowercase ID for the lookup to ensure a match.
-        const player_id_lower = player.Chess_com_ID ? player.Chess_com_ID.toLowerCase() : '';
-        
-        const activity_data = allDates.map(date => {
-          const playerActivity = activityMap[player_id_lower];
-          return playerActivity?.[date] || 0; // Return count for the date, or 0 if none
-        });
-
-        return { ...player, activity_data };
-      });
-      
-      // 5. Set the final data structure needed for rendering.
-      const dataToRender = {
-          last_30_days: allDates,
-          players: finalPlayersData
-      };
-      
-      setProcessedData(dataToRender);
-      
-    } catch (err) {
-      console.error('Error fetching or processing player data:', err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  
+  const selectBg = useColorModeValue('white', 'gray.700');
+  const panelBg = useColorModeValue('gray.50', 'gray.800');
+  const emptyHeatmapColor = useColorModeValue('blackAlpha.100', 'whiteAlpha.100');
+  
+  const activityColor = (count) => {
+    if (count === 0) return emptyHeatmapColor;
+    if (count <= 2) return 'green.200';
+    if (count <= 5) return 'green.400';
+    return 'green.600';
+  };
+  const attendanceColor = (status) => {
+    switch (status?.toLowerCase()) {
+        case 'present': return 'green.400';
+        case 'absent': return 'red.300';
+        default: return emptyHeatmapColor;
     }
   };
 
+  const activityLegendItems = [
+    { label: 'None', color: emptyHeatmapColor },
+    { label: '1-2', color: 'green.200' },
+    { label: '3-5', color: 'green.400' },
+    { label: '5+', color: 'green.600' },
+  ];
+  const attendanceLegendItems = [
+    { label: 'Present', color: 'green.400' },
+    { label: 'Absent', color: 'red.300' },
+    { label: 'No Record', color: emptyHeatmapColor },
+  ];
+
+
   useEffect(() => {
-    fetchAndProcessData();
-    // Set up a periodic refresh every 10 minutes
-    const interval = setInterval(fetchAndProcessData, 600000); 
-
-    // Cleanup the interval when the component is unmounted
-    return () => clearInterval(interval); 
+    const fetchReports = async () => {
+      setLoading(true); setError(null);
+      try {
+        const response = await fetch('/api/players/reports');
+        if (!response.ok) throw new Error('Failed to fetch player reports.');
+        const data = await response.json();
+        setAllPlayersData(data.players || []);
+        if (data.players && data.players.length > 0) {
+            setSelectedPlayerId(data.players[0].Chess_com_ID);
+        }
+      } catch (err) { setError(err.message); } finally { setLoading(false); }
+    };
+    fetchReports();
   }, []);
+
+  useEffect(() => {
+    if (!selectedPlayerId) { setLiveStats(null); return; }
+    const fetchLiveStats = async () => {
+      setLoading(true); setError(null);
+      try {
+        const response = await fetch(`https://api.chess.com/pub/player/${selectedPlayerId}/stats`);
+        if (!response.ok) throw new Error(`Failed to fetch live stats for ${selectedPlayerId}.`);
+        const data = await response.json();
+        setLiveStats(data);
+      } catch (err) { setError(err.message); } finally { setLoading(false); }
+    };
+    fetchLiveStats();
+  }, [selectedPlayerId]);
   
-  // --- Render Logic ---
+  const selectedPlayerData = useMemo(() => allPlayersData.find(p => p.Chess_com_ID === selectedPlayerId), [allPlayersData, selectedPlayerId]);
 
-  if (loading) {
-    return (
-      <Center height="80vh">
-        <Spinner size="xl" /> <Text ml={3}>Loading Player Activity...</Text>
-      </Center>
-    );
-  }
+  const allStats = useMemo(() => {
+    if (!selectedPlayerData || !liveStats) return {};
+    const getStats = (history, liveTimeCategory) => {
+        if (!history || history.length === 0) return { joiningRating: null, improvement: null };
+        const joinDate = new Date(selectedPlayerData.Joining_Date);
+        const firstGameAfterJoining = history.find(g => new Date(g.date) >= joinDate);
+        const joiningRating = firstGameAfterJoining?.rating;
+        const improvement = joiningRating && liveTimeCategory?.last?.rating ? liveTimeCategory.last.rating - joiningRating : null;
+        return { joiningRating, improvement };
+    };
+    return {
+        rapid: getStats(selectedPlayerData.rapid_graph, liveStats.chess_rapid),
+        blitz: getStats(selectedPlayerData.blitz_graph, liveStats.chess_blitz),
+    };
+  }, [selectedPlayerData, liveStats]);
 
-  if (error) {
-    return (
-      <Center height="80vh" p={4}>
-        <Alert status="error" flexDirection="column" alignItems="center" justifyContent="center" textAlign="center">
-          <AlertIcon boxSize="40px" mr={0} />
-          <Text mt={4} mb={2} fontSize="lg" fontWeight="bold">Error Fetching Data</Text>
-          <Text>{error}</Text>
-          <Text mt={2} fontSize="sm" color="gray.500">
-            Please ensure the backend server is running and the database is accessible.
-          </Text>
-        </Alert>
-      </Center>
-    );
-  }
+  const activityData = useMemo(() => {
+    if (!selectedPlayerData) return { activity: [], attendance: [] };
+    const gameCounts = new Map();
+    [...(selectedPlayerData.rapid_graph || []), ...(selectedPlayerData.blitz_graph || [])].forEach(game => {
+        const gameDate = new Date(game.date).toISOString().split('T')[0];
+        gameCounts.set(gameDate, (gameCounts.get(gameDate) || 0) + 1);
+    });
+    
+    const activityDays = [], attendanceDays = [];
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
 
-  if (!processedData || !processedData.players || !processedData.last_30_days) {
-    return (
-      <Center height="80vh" p={4}>
-        <Alert status="warning"><AlertIcon />No player activity data available to display.</Alert>
-      </Center>
-    );
-  }
+    for (let i = 29; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(today.getDate() - i);
+        const dateString = date.toISOString().split('T')[0];
+        activityDays.push({ date: dateString, value: gameCounts.get(dateString) || 0 });
+        attendanceDays.push({ date: dateString, value: selectedPlayerData.Attendance?.[dateString] || 'No Record' });
+    }
+    return { activity: activityDays, attendance: attendanceDays };
+  }, [selectedPlayerData]);
 
-  const { last_30_days, players } = processedData;
-
-  return (
-    <VStack spacing={8} p={8} alignItems="stretch" w="full">
-      <Text fontSize="3xl" fontWeight="bold" textAlign="left">
-        Player Activity - Last 30 Days
-      </Text>
-
-      {players.length === 0 ? (
-        <Text>No players found in the database.</Text>
-      ) : (
-        <Box overflowX="auto" w="full" py={2}>
-          <Grid
-            templateColumns={`${playerNameColumnWidth} repeat(${last_30_days.length}, minmax(${activitySquareSize}, 1fr))`}
-            columnGap={gridColumnGap}
-            rowGap={gridRowGap}
-            alignItems="center"
-            minWidth={`calc(${playerNameColumnWidth} + (${last_30_days.length} * (${activitySquareSize} + ${gridColumnGap})))`}
-          >
-            <GridItem /> {/* Empty cell for alignment */}
-            {last_30_days.map((date, index) => (
-              <GridItem key={`header-date-${index}`} textAlign="center">
-                <Tooltip label={date} placement="top" hasArrow>
-                  <Text fontSize="sm" color="gray.600" h={activitySquareSize} display="flex" alignItems="flex-end" justifyContent="center">
-                    {date.substring(8, 10)}
-                  </Text>
-                </Tooltip>
-              </GridItem>
-            ))}
-
-            {players.map((player) => {
-              const playerId = player.Chess_com_ID || player.Player_Name;
-              const isHovered = hoveredPlayerId === playerId;
-
-              return (
-                <React.Fragment key={playerId}>
-                  <GridItem
-                    pr={4}
-                    pl={2}
-                    fontSize="lg"
-                    textAlign="left"
-                    whiteSpace="nowrap"
-                    overflow="hidden"
-                    textOverflow="ellipsis"
-                    h={activitySquareSize}
-                    display="flex"
-                    alignItems="center"
-                    onMouseEnter={() => setHoveredPlayerId(playerId)}
-                    onMouseLeave={() => setHoveredPlayerId(null)}
-                    bg={isHovered ? hoverBgColor : 'transparent'}
-                    borderLeftRadius={isHovered ? "md" : "none"}
-                    transition="background-color 0.1s ease-in-out"
-                    cursor="default"
-                  >
-                    <Tooltip label={player.Player_Name} placement="right" hasArrow openDelay={500}>
-                       <Text as="span">{player.Player_Name}</Text>
-                    </Tooltip>
-                  </GridItem>
-
-                  {player.activity_data.map((count, dayIndex) => (
-                    <GridItem
-                      key={`activity-${playerId}-${dayIndex}`}
-                      display="flex"
-                      justifyContent="center"
-                      alignItems="center"
-                      h={activitySquareSize}
-                      onMouseEnter={() => setHoveredPlayerId(playerId)}
-                      onMouseLeave={() => setHoveredPlayerId(null)}
-                      bg={isHovered ? hoverBgColor : 'transparent'}
-                      borderRightRadius={isHovered && dayIndex === last_30_days.length - 1 ? "md" : "none"}
-                      transition="background-color 0.1s ease-in-out"
-                    >
-                      <Tooltip label={`${last_30_days[dayIndex]}: ${count} games`} placement="top" hasArrow openDelay={300}>
-                        <Box
-                          w={activitySquareSize}
-                          h={activitySquareSize}
-                          bg={getActivityColor(count)}
-                          borderRadius="4px"
-                          border={count <= 0 ? "1px solid" : "none"}
-                          borderColor={count <= 0 ? "gray.400" : "transparent"}
-                        />
-                      </Tooltip>
-                    </GridItem>
-                  ))}
-                </React.Fragment>
-              );
-            })}
-          </Grid>
-        </Box>
-      )}
-
-      {/* Legend */}
-      <Flex mt={4} justifyContent="flex-end" alignItems="center" w="full" pr={4}>
-        <Text fontSize="md" mr={3}>Less</Text>
-        {[0, 1, 3, 6, 10].map(count => (
-            <Tooltip key={`legend-${count}`} label={`${count === 10 ? '10+' : count} games`} placement="top" hasArrow>
-                <Box
-                    w={activitySquareSize} h={activitySquareSize} bg={getActivityColor(count)} m="2px" borderRadius="4px"
-                    border={count <= 0 ? "1px solid" : "none"} borderColor={count <= 0 ? "gray.400" : "transparent"}
-                />
-            </Tooltip>
-        ))}
-        <Text fontSize="md" ml={3}>More</Text>
-      </Flex>
+  const Panel = ({ children, ...props }) => (
+    <VStack 
+        bg={panelBg} 
+        p={{base: 4, md: 6}} 
+        borderRadius="lg" 
+        shadow="sm" 
+        spacing={6} 
+        align="stretch"
+        transition="box-shadow 0.2s ease-in-out"
+        _hover={{ shadow: 'md' }}
+        {...props}
+    >
+        {children}
     </VStack>
+  );
+
+  if (loading && allPlayersData.length === 0) {
+    return <Center h="80vh"><Spinner size="xl" /></Center>;
+  }
+  
+  return (
+    <Box p={{ base: 4, md: 8 }} w="full">
+      <VStack spacing={8} align="stretch">
+        <Select placeholder="Select a Player..." size="lg" value={selectedPlayerId} onChange={(e) => setSelectedPlayerId(e.target.value)} isDisabled={allPlayersData.length === 0} bg={selectBg} shadow="sm">
+            {allPlayersData.map(p => (<option key={p.Chess_com_ID} value={p.Chess_com_ID}>{p.Player_Name} ({p.Chess_com_ID})</option>))}
+        </Select>
+        
+        {loading && selectedPlayerId && <Center h="60vh"><Spinner size="xl" /></Center>}
+        {error && <Alert status="error" borderRadius="md"><AlertIcon />{error}</Alert>}
+
+        {!loading && selectedPlayerData && (
+          <VStack spacing={8} align="stretch">
+            {/* --- TOP SECTION: STATS & GRAPHS --- */}
+            <Grid templateColumns={{ base: '1fr', lg: '1fr 1fr' }} gap={8} alignItems="start">
+                {/* --- Left Column: Stats --- */}
+                <Panel>
+                    <Box textAlign="center">
+                        <Heading size="xl">{selectedPlayerData.Player_Name}</Heading>
+                        <Text fontSize="md" color="gray.500">Course Joining Date: {new Date(selectedPlayerData.Joining_Date).toLocaleDateString()}</Text>
+                    </Box>
+                    <VStack spacing={0} align="stretch" sx={{ '& > div:last-of-type': { border: 'none' } }}>
+                        <Heading size="md" mb={3}>Rapid Stats</Heading>
+                        <StatItem label="Joining Rating" value={allStats.rapid?.joiningRating} />
+                        <StatItem label="Current Rating" value={liveStats?.chess_rapid?.last?.rating} />
+                        <StatItem label="Best Rating" value={liveStats?.chess_rapid?.best?.rating} />
+                        <ImprovementStat label="Improvement" value={allStats.rapid?.improvement} />
+                        <StatItem label="Record (W/L/D)" value={`${liveStats?.chess_rapid?.record?.win ?? 'N/A'}/${liveStats?.chess_rapid?.record?.loss ?? 'N/A'}/${liveStats?.chess_rapid?.record?.draw ?? 'N/A'}`} />
+                    </VStack>
+                    <VStack spacing={0} align="stretch" sx={{ '& > div:last-of-type': { border: 'none' } }}>
+                        <Heading size="md" mb={3}>Blitz Stats</Heading>
+                        <StatItem label="Joining Rating" value={allStats.blitz?.joiningRating} />
+                        <StatItem label="Current Rating" value={liveStats?.chess_blitz?.last?.rating} />
+                        <StatItem label="Best Rating" value={liveStats?.chess_blitz?.best?.rating} />
+                        <ImprovementStat label="Improvement" value={allStats.blitz?.improvement} />
+                        <StatItem label="Record (W/L/D)" value={`${liveStats?.chess_blitz?.record?.win ?? 'N/A'}/${liveStats?.chess_blitz?.record?.loss ?? 'N/A'}/${liveStats?.chess_blitz?.record?.draw ?? 'N/A'}`} />
+                    </VStack>
+                </Panel>
+                {/* --- Right Column: Graphs --- */}
+                <VStack spacing={8} align="stretch">
+                    <Panel p={4}>
+                        <Heading size="md" textAlign="center" mb={4}>Rapid Performance vs. Experience</Heading>
+                        <RatingChart data={selectedPlayerData.rapid_graph} strokeColor="#3182CE" joiningDate={selectedPlayerData.Joining_Date} />
+                    </Panel>
+                    <Panel p={4}>
+                        <Heading size="md" textAlign="center" mb={4}>Blitz Performance vs. Experience</Heading>
+                        <RatingChart data={selectedPlayerData.blitz_graph} strokeColor="#38A169" joiningDate={selectedPlayerData.Joining_Date} />
+                    </Panel>
+                </VStack>
+            </Grid>
+
+            {/* --- BOTTOM SECTION: ACTIVITY TRACKERS --- */}
+            <Grid templateColumns={{ base: '1fr', md: '1fr 1fr' }} gap={8}>
+                <Panel>
+                    <LinearActivityTracker title="Daily Game Activity" data={activityData.activity} getColor={activityColor} getTooltipLabel={(count, date) => `${count} games on ${new Date(date).toLocaleDateString()}`} 
+                        LegendComponent={() => <Legend items={activityLegendItems} />}
+                    />
+                </Panel>
+                <Panel>
+                    <LinearActivityTracker title="Attendance" data={activityData.attendance} getColor={attendanceColor} getTooltipLabel={(status, date) => `${status} on ${new Date(date).toLocaleDateString()}`} 
+                        LegendComponent={() => <Legend items={attendanceLegendItems} />}
+                    />
+                </Panel>
+            </Grid>
+          </VStack>
+        )}
+      </VStack>
+    </Box>
   );
 };
 

@@ -17,4 +17,5 @@ const pool = new Pool({
 // We export a single, universal query function for the entire application.
 module.exports = {
   query: (text, params) => pool.query(text, params),
-};
+}; 
+

@@ -137,11 +137,20 @@ const ChessGame = ({ initialFen, maxDepth = 15, minDepth = 10 }) => {
             innerHeight: window.innerHeight,
         };
         setWindowSize(newSize);
-        let bw=newSize.innerWidth/2;
-        while (bw > newSize.innerHeight / 1.4 ){
-              bw = bw - 20;
+
+        // Use Chakra's 'lg' breakpoint (~992px) to switch between layouts
+        if (newSize.innerWidth < 992) {
+            // Mobile/Tablet view: board takes up most of the screen width
+            const padding = 48; // ~12px padding on each side
+            setBoardWidth(newSize.innerWidth - padding);
+        } else {
+            // Desktop view: original logic is retained for laptop view
+            let bw = newSize.innerWidth / 2;
+            while (bw > newSize.innerHeight / 1.4 ){
+                  bw = bw - 20;
+            }
+            setBoardWidth(bw);
         }
-        setBoardWidth(bw);
     };
     window.addEventListener("resize", handleResize);
     handleResize();
@@ -278,7 +287,7 @@ const ChessGame = ({ initialFen, maxDepth = 15, minDepth = 10 }) => {
     else return makeMove({ from: sourceSquare, to: targetSquare, promotion: 'q' });
   }, [game, humanPlayerColor, aiEnabled, checkIsPromotion, makeMove, isGameLoading]);
 
-  const onSquareClick = useCallback((square) => {
+    const onSquareClick = useCallback((square) => {
      if (!game || game.isGameOver() || promotionDialogOpen || isGameLoading) return;
     if (aiEnabled && game.turn() !== humanPlayerColor.charAt(0)) return;
 
@@ -429,35 +438,74 @@ const ChessGame = ({ initialFen, maxDepth = 15, minDepth = 10 }) => {
   }, [ game, selectedSquare, highlightedSquares, selectedSquareColor, legalMoveDotColor, captureSquareColor, checkHighlightColor ]);
 
 
-  // --- Render (Unchanged) ---
+  // --- Render ---
   return (
-    <HStack align="start" spacing={6} p={5}>
-      <Box borderRadius="lg" p={4} bg={boardContainerBg} boxShadow="xl" border="1px" borderColor={boardBorderColor}>
-        <Flex justify="space-between" align="center" mb={3} px={1}>
-          <Flex align="center" minH="28px" flexShrink={1} overflow="hidden" mr={3}>
-            {(isGameLoading || isAiThinking) && <Spinner color="teal.500" size="sm" mr={2} />}
-            <Text fontSize="xl" fontWeight="bold" noOfLines={1} title={statusText} color={statusTextColor}>
-              {isGameLoading ? "Loading Game..." : statusText}
-            </Text>
+    <Flex
+      direction={{ base: 'column', lg: 'row' }}
+      align={{ base: 'center', lg: 'start' }}
+      gap={{ base: 4, lg: 6 }}
+      p={{ base: 2, md: 4, lg: 5 }}
+      w="100%"
+    >
+      {/* Board and Mobile Controls Container */}
+      <VStack spacing={4} w={{ base: '100%', lg: 'auto' }} align="center">
+        <Box
+          borderRadius="lg"
+          p={{ base: 2, md: 4 }}
+          bg={boardContainerBg}
+          boxShadow="xl"
+          border="1px"
+          borderColor={boardBorderColor}
+          w="fit-content"
+        >
+          <Flex justify="space-between" align="center" mb={3} px={1}>
+            <Flex align="center" minH="28px" flexShrink={1} overflow="hidden" mr={3}>
+              {(isGameLoading || isAiThinking) && <Spinner color="teal.500" size="sm" mr={2} />}
+              <Text fontSize="xl" fontWeight="bold" noOfLines={1} title={statusText} color={statusTextColor}>
+                {isGameLoading ? "Loading Game..." : statusText}
+              </Text>
+            </Flex>
+            <HStack spacing={3} align="center" flexShrink={0}>
+              <Text fontSize="sm" fontWeight="medium" color={useColorModeValue("gray.600", "gray.300")}>
+                {aiEnabled ? `vs AI (${humanPlayerColor === 'white' ? 'Black' : 'White'})` : "Pass & Play"}
+              </Text>
+              <Switch id="ai-switch" colorScheme="teal" isChecked={aiEnabled} onChange={(e) => { setAiEnabled(e.target.checked); if (e.target.checked) setPauseAi(false); else setIsAiThinking(false); }} isDisabled={isGameLoading || game?.isGameOver() || isAiThinking} size="md"/>
+            </HStack>
           </Flex>
-          <HStack spacing={3} align="center" flexShrink={0}>
-            <Text fontSize="sm" fontWeight="medium" color={useColorModeValue("gray.600", "gray.300")}>
-              {aiEnabled ? `vs AI (${humanPlayerColor === 'white' ? 'Black' : 'White'})` : "Pass & Play"}
-            </Text>
-            <Switch id="ai-switch" colorScheme="teal" isChecked={aiEnabled} onChange={(e) => { setAiEnabled(e.target.checked); if (e.target.checked) setPauseAi(false); else setIsAiThinking(false); }} isDisabled={isGameLoading || game?.isGameOver() || isAiThinking} size="md"/>
-          </HStack>
-        </Flex>
-        {isGameLoading ? (
-            <Box width={`${boardWidth}px`} height={`${boardWidth}px`} display="flex" alignItems="center" justifyContent="center">
-                <Text color={statusTextColor}>Loading Board...</Text>
-            </Box>
-        ) : (
-            <Chessboard id="PlayerVsAiBoard" position={fen} isDraggablePiece={isDraggablePiece} onPieceDrop={onPieceDrop} onSquareClick={onSquareClick} onPromotionCheck={onPromotionCheck} onPromotionPieceSelect={handlePromotionPieceSelect} showPromotionDialog={promotionDialogOpen} promotionToSquare={pendingManualPromotion?.to ?? null} promotionDialogVariant="modal"
-              boardOrientation={humanPlayerColor} boardWidth={boardWidth} customSquareStyles={getCustomSquareStyles()} customDarkSquareStyle={customDarkSquareStyle} customLightSquareStyle={customLightSquareStyle} snapToCursor={true} animationDuration={150} />
-        )}
-      </Box>
+          {isGameLoading ? (
+              <Box width={`${boardWidth}px`} height={`${boardWidth}px`} display="flex" alignItems="center" justifyContent="center">
+                  <Text color={statusTextColor}>Loading Board...</Text>
+              </Box>
+          ) : (
+              <Chessboard id="PlayerVsAiBoard" position={fen} isDraggablePiece={isDraggablePiece} onPieceDrop={onPieceDrop} onSquareClick={onSquareClick} onPromotionCheck={onPromotionCheck} onPromotionPieceSelect={handlePromotionPieceSelect} showPromotionDialog={promotionDialogOpen} promotionToSquare={pendingManualPromotion?.to ?? null} promotionDialogVariant="modal"
+                boardOrientation={humanPlayerColor} boardWidth={boardWidth} customSquareStyles={getCustomSquareStyles()} customDarkSquareStyle={customDarkSquareStyle} customLightSquareStyle={customLightSquareStyle} snapToCursor={true} animationDuration={150} />
+          )}
+        </Box>
 
-      <VStack align="stretch" spacing={5} width="220px" pt={1}>
+        {/* --- Mobile-only Controls --- */}
+        <VStack
+          align="stretch"
+          spacing={3}
+          w="100%"
+          maxW={`${boardWidth}px`}
+          display={{ base: 'flex', lg: 'none' }} // Show only on base-to-lg screens
+        >
+          <HStack spacing={3}>
+            <Button colorScheme="orange" variant="outline" onClick={undoMove} isDisabled={isGameLoading || isAiThinking || moveHistory.length < 1 || game?.isGameOver()} size="sm" flexGrow={1}> Undo </Button>
+            <Button colorScheme="cyan" variant="outline" onClick={forwardMove} isDisabled={isGameLoading || isAiThinking || forwardMoves.length < 1 || game?.isGameOver()} size="sm" flexGrow={1}> Redo </Button>
+          </HStack>
+          <Button colorScheme="red" variant="solid" onClick={resetGame} isDisabled={isGameLoading || isAiThinking} size="sm" width="100%"> Reset Game </Button>
+        </VStack>
+      </VStack>
+
+      {/* --- Desktop-only Move History & Controls --- */}
+      <VStack
+        align="stretch"
+        spacing={5}
+        width="220px"
+        pt={1}
+        display={{ base: 'none', lg: 'block' }} // Hide on base-to-lg screens
+      >
         <Divider />
          <VStack align="stretch" spacing={2}>
              <Text fontSize="lg" fontWeight="bold" color={controlsTextColor}>Move History</Text>
@@ -495,7 +543,7 @@ const ChessGame = ({ initialFen, maxDepth = 15, minDepth = 10 }) => {
                                 <Text minW="55px" px={1} fontWeight={item.isBlackLast ? 'extrabold': 'normal'} color={item.isBlackLast ? lastMoveColor : defaultMoveColor} visibility={item.black ? 'visible' : 'hidden'}>{item.black ?? ""}</Text>
                             </Flex>
                         ));
-                    })()}
+                                            })()}
                  </VStack>
               )}
             </Box>
@@ -509,7 +557,7 @@ const ChessGame = ({ initialFen, maxDepth = 15, minDepth = 10 }) => {
              <Button colorScheme="red" variant="solid" onClick={resetGame} isDisabled={isGameLoading || isAiThinking} size="sm" width="100%"> Reset Game </Button>
         </VStack>
       </VStack>
-    </HStack>
+    </Flex>
   );
 };
 
