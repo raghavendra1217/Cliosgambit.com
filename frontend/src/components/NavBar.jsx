@@ -1,6 +1,4 @@
-// components/NavBar.jsx
-
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Box,
   Flex,
@@ -12,6 +10,7 @@ import {
   MenuButton,
   MenuList,
   MenuItem,
+  Button, // <-- IMPORT Button
   useColorMode,
   useColorModeValue,
 } from '@chakra-ui/react';
@@ -19,9 +18,67 @@ import { MoonIcon, SunIcon, HamburgerIcon } from '@chakra-ui/icons';
 import { Link as RouterLink } from 'react-router-dom';
 import CelebrationButton from './CelebrationButton';
 import CameraToggleButton from './CameraToggleButton';
+import { useAuth } from '../AppContext';
+
+const Draggable = ({ children }) => {
+  const nodeRef = useRef(null);
+  const [pos, setPos] = useState({ x: 100, y: 100 });
+  const [dragging, setDragging] = useState(false);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+  const onMouseDown = (e) => {
+    setDragging(true);
+    setOffset({
+      x: e.clientX - pos.x,
+      y: e.clientY - pos.y,
+    });
+  };
+
+  const onMouseMove = (e) => {
+    if (!dragging) return;
+    setPos({
+      x: e.clientX - offset.x,
+      y: e.clientY - offset.y,
+    });
+  };
+
+  const onMouseUp = () => setDragging(false);
+
+  React.useEffect(() => {
+    if (dragging) {
+      window.addEventListener('mousemove', onMouseMove);
+      window.addEventListener('mouseup', onMouseUp);
+    } else {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  });
+
+  return (
+    <div
+      ref={nodeRef}
+      onMouseDown={onMouseDown}
+      style={{
+        position: 'fixed',
+        left: pos.x,
+        top: pos.y,
+        cursor: 'move',
+        zIndex: 2000,
+        userSelect: 'none',
+      }}
+    >
+      {children}
+    </div>
+  );
+};
 
 function NavBar() {
   const { colorMode, toggleColorMode } = useColorMode();
+  const { isAuthenticated, user, logout } = useAuth();
 
   const bgColor = useColorModeValue('rgba(255, 255, 255, 0.9)', 'rgba(26, 32, 44, 0.9)');
   const backdropFilter = 'blur(8px)';
@@ -50,8 +107,29 @@ function NavBar() {
 
         {/* --- DESKTOP NAVIGATION --- */}
         <HStack spacing={4} display={{ base: 'none', md: 'flex' }}>
-          <CelebrationButton />
-          <CameraToggleButton />
+          {/* Only coach and admin can see these components */}
+          {isAuthenticated && (user?.role === 'coach' || user?.role === 'admin') && <CelebrationButton />}
+          {isAuthenticated && (user?.role === 'coach' || user?.role === 'admin') && <CameraToggleButton />}
+          
+          <Link as={RouterLink} to="/" color={textColor} fontWeight="medium" _hover={{ color: 'teal.500', textDecoration: 'none' }}>
+            Modules
+          </Link>
+
+          {/* ADMIN NAVIGATION - Show admin-specific links */}
+          {isAuthenticated && user?.role === 'admin' && (
+            <>
+              <Link as={RouterLink} to="/api/players" color={textColor} fontWeight="medium" _hover={{ color: 'teal.500', textDecoration: 'none' }}>
+                Playrs
+              </Link>
+              <Link as={RouterLink} to="/api/access-control" color={textColor} fontWeight="medium" _hover={{ color: 'teal.500', textDecoration: 'none' }}>
+                Acx_Ctrl
+              </Link>
+              <Link as={RouterLink} to="/api/activity-tracker" color={textColor} fontWeight="medium" _hover={{ color: 'teal.500', textDecoration: 'none' }}>
+                Activity Tracker
+              </Link>
+              
+            </>
+          )}
 
           <IconButton
             onClick={toggleColorMode}
@@ -61,10 +139,18 @@ function NavBar() {
             color={textColor}
             _hover={{ bg: useColorModeValue('gray.200', 'gray.600') }}
           />
-          {/* "Players" link has been removed from here */}
-          <Link as={RouterLink} to="/" color="teal.500" fontSize="lg" _hover={{ textDecoration: 'underline' }}>
-            Modules
-          </Link>
+          
+          {/* LOGIN/LOGOUT BUTTONS */}
+          {!isAuthenticated ? (
+            <Button as={RouterLink} to="/login" colorScheme="teal" variant="solid">
+              Login
+            </Button>
+          ) : (
+            <Button onClick={logout} colorScheme="red" variant="outline" size="sm">
+              Logout
+            </Button>
+          )}
+          
         </HStack>
 
         {/* --- MOBILE NAVIGATION (HAMBURGER MENU) --- */}
@@ -84,10 +170,34 @@ function NavBar() {
               aria-label="Open menu"
             />
             <MenuList>
-              {/* "Players" menu item has been removed from here */}
               <MenuItem as={RouterLink} to="/">
                 Modules
               </MenuItem>
+              {/* ADMIN MENU ITEMS - Show admin-specific links */}
+              {isAuthenticated && user?.role === 'admin' && (
+                <>
+                  <MenuItem as={RouterLink} to="/api/players">
+                    Playrs
+                  </MenuItem>
+                  <MenuItem as={RouterLink} to="/api/access-control">
+                    Acx_Ctrl
+                  </MenuItem>
+                  <MenuItem as={RouterLink} to="/api/activity-tracker">
+                    Activity Tracker
+                  </MenuItem>
+                  
+                </>
+              )}
+              {/* LOGIN/LOGOUT MENU ITEMS */}
+              {!isAuthenticated ? (
+                <MenuItem as={RouterLink} to="/login">
+                  Login 
+                </MenuItem>
+              ) : (
+                <MenuItem onClick={logout}>
+                  Logout
+                </MenuItem>
+              )}
             </MenuList>
           </Menu>
         </Flex>

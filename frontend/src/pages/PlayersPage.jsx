@@ -176,9 +176,14 @@ const PlayersPage = () => {
   };
   const attendanceColor = (status) => {
     switch (status?.toLowerCase()) {
-        case 'present': return 'green.400';
-        case 'absent': return 'red.300';
-        default: return emptyHeatmapColor;
+        case 'present':
+        case 'p':
+            return 'green.400';
+        case 'absent':
+        case 'a':
+            return 'red.300';
+        default:
+            return emptyHeatmapColor;
     }
   };
 
@@ -260,7 +265,8 @@ const PlayersPage = () => {
         date.setDate(today.getDate() - i);
         const dateString = date.toISOString().split('T')[0];
         activityDays.push({ date: dateString, value: gameCounts.get(dateString) || 0 });
-        attendanceDays.push({ date: dateString, value: selectedPlayerData.Attendance?.[dateString] || 'No Record' });
+        const status = selectedPlayerData.Attendance?.[dateString] || 'No Record';
+        attendanceDays.push({ date: dateString, value: status });
     }
     return { activity: activityDays, attendance: attendanceDays };
   }, [selectedPlayerData]);
@@ -343,9 +349,9 @@ const PlayersPage = () => {
                     />
                 </Panel>
                 <Panel>
-                    <LinearActivityTracker title="Attendance" data={activityData.attendance} getColor={attendanceColor} getTooltipLabel={(status, date) => `${status} on ${new Date(date).toLocaleDateString()}`} 
-                        LegendComponent={() => <Legend items={attendanceLegendItems} />}
-                    />
+                    <LinearActivityTracker title="Attendance" data={activityData.attendance} getColor={attendanceColor} getTooltipLabel={(status, date) => `${status} on ${new Date(date).toLocaleDateString()}`}
+  LegendComponent={() => <Legend items={attendanceLegendItems} />}
+/>
                 </Panel>
             </Grid>
           </VStack>

@@ -112,6 +112,10 @@ const ChessGame = ({ initialFen, maxDepth = 15, minDepth = 10 }) => {
   const captureSquareColor = useColorModeValue( "rgba(255, 99, 71, 0.4)", "rgba(255, 127, 80, 0.45)" );
   const checkHighlightColor = useColorModeValue( "rgba(220, 20, 60, 0.7)", "rgba(255, 69, 0, 0.7)" );
   const [boardWidth, setBoardWidth] = useState(420);
+  // Fixed move history/control panel sizing based on board height
+  const movePanelWidth = 256; // fixed width in px
+  const movePanelHeight = Math.round(boardWidth * 1.15); // total panel height
+  const moveHistoryHeight = Math.round(boardWidth * 0.75); // 75% of board height
 
   // --- Utility Functions (Unchanged) ---
   const checkIsPromotion = useCallback((from, to) => checkIsPromotionFn(game, from, to), [game]);
@@ -502,17 +506,20 @@ const ChessGame = ({ initialFen, maxDepth = 15, minDepth = 10 }) => {
       <VStack
         align="stretch"
         spacing={5}
-        width="220px"
+        width={{ base: '100%', lg: `${movePanelWidth}px` }}
         pt={1}
         display={{ base: 'none', lg: 'block' }} // Hide on base-to-lg screens
+        minW={{ lg: `${movePanelWidth}px` }}
+        maxW={{ lg: `${movePanelWidth}px` }}
+        h={{ lg: `${movePanelHeight}px` }}
       >
         <Divider />
-         <VStack align="stretch" spacing={2}>
+         <VStack align="stretch" spacing={2} flex={1} minH={0}>
              <Text fontSize="lg" fontWeight="bold" color={controlsTextColor}>Move History</Text>
             <Box
               ref={moveHistoryRef}
-              h={Math.min(windowSize.innerHeight/2,windowSize.innerWidth/3)}
-              w={Math.min(windowSize.innerWidth/4, windowSize.innerHeight/3.7)}
+              h={`${moveHistoryHeight}px`}
+              w="100%"
               overflowY="auto"
               bg={historyBg} p={3} borderRadius="md" boxShadow="md"  border="1px" borderColor={historyBorderColor}
               sx={{ '&::-webkit-scrollbar': { width: '8px' }, '&::-webkit-scrollbar-track': { background: scrollbarTrackBg }, '&::-webkit-scrollbar-thumb': { background: scrollbarThumbBg }, '&::-webkit-scrollbar-thumb:hover': { background: scrollbarThumbHoverBg } }}
@@ -537,10 +544,10 @@ const ChessGame = ({ initialFen, maxDepth = 15, minDepth = 10 }) => {
                         }
 
                         return pairs.map((item) => (
-                            <Flex key={item.moveNumber} justify="start" align="center" fontSize="sm" py="2px" wrap="nowrap" >
-                                <Text fontWeight="bold" minW="30px" textAlign="right" mr={2} color={historyMoveNumColor}>{item.moveNumber}.</Text>
-                                <Text minW="55px" px={1} fontWeight={item.isWhiteLast ? 'extrabold': 'normal'} color={item.usePlaceholderStyle ? placeholderMoveColor : (item.isWhiteLast ? lastMoveColor : defaultMoveColor)} visibility={item.white ? 'visible' : 'hidden'}>{item.white ?? ""}</Text>
-                                <Text minW="55px" px={1} fontWeight={item.isBlackLast ? 'extrabold': 'normal'} color={item.isBlackLast ? lastMoveColor : defaultMoveColor} visibility={item.black ? 'visible' : 'hidden'}>{item.black ?? ""}</Text>
+                            <Flex key={item.moveNumber} justify="start" align="center" fontSize="md" py="2px" wrap="nowrap">
+                                <Text fontWeight="bold" minW="35px" textAlign="right" mr={3} color={historyMoveNumColor}>{item.moveNumber}.</Text>
+                                <Text minW="70px" px={2} fontWeight={item.isWhiteLast ? 'extrabold': 'normal'} color={item.usePlaceholderStyle ? placeholderMoveColor : (item.isWhiteLast ? lastMoveColor : defaultMoveColor)} visibility={item.white ? 'visible' : 'hidden'}>{item.white ?? ""}</Text>
+                                <Text minW="70px" px={2} fontWeight={item.isBlackLast ? 'extrabold': 'normal'} color={item.isBlackLast ? lastMoveColor : defaultMoveColor} visibility={item.black ? 'visible' : 'hidden'}>{item.black ?? ""}</Text>
                             </Flex>
                         ));
                                             })()}
@@ -548,13 +555,13 @@ const ChessGame = ({ initialFen, maxDepth = 15, minDepth = 10 }) => {
               )}
             </Box>
          </VStack>
-         <VStack align="stretch" spacing={3}>
+         <VStack align="stretch" spacing={2} minH={0}>
              <Text fontSize="lg" fontWeight="bold" color={controlsTextColor}>Controls</Text>
-             <HStack spacing={3}>
-               <Button colorScheme="orange" variant="outline" onClick={undoMove} isDisabled={isGameLoading || isAiThinking || moveHistory.length < 1 || game?.isGameOver()} size="sm" flexGrow={1}> Undo </Button>
-               <Button colorScheme="cyan" variant="outline" onClick={forwardMove} isDisabled={isGameLoading || isAiThinking || forwardMoves.length < 1 || game?.isGameOver()} size="sm" flexGrow={1}> Redo </Button>
+             <HStack spacing={2}>
+               <Button colorScheme="orange" variant="outline" onClick={undoMove} isDisabled={isGameLoading || isAiThinking || moveHistory.length < 1 || game?.isGameOver()} size="sm" flex={1}> Undo </Button>
+               <Button colorScheme="cyan" variant="outline" onClick={forwardMove} isDisabled={isGameLoading || isAiThinking || forwardMoves.length < 1 || game?.isGameOver()} size="sm" flex={1}> Redo </Button>
              </HStack>
-             <Button colorScheme="red" variant="solid" onClick={resetGame} isDisabled={isGameLoading || isAiThinking} size="sm" width="100%"> Reset Game </Button>
+             <Button colorScheme="red" variant="solid" onClick={resetGame} isDisabled={isGameLoading || isAiThinking} size="sm" width="100%" h="40px"> Reset Game </Button>
         </VStack>
       </VStack>
     </Flex>

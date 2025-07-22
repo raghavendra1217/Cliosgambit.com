@@ -11,7 +11,7 @@ import axios from 'axios';
 import { Chess } from 'chess.js';
 import ChessGame from './ChessGame';
 
-// --- [UNCHANGED] Helper to get a sequence of moves from the online Stockfish API ---
+
 const fetchPuzzleSolution = async (initialFen, depth, ply) => {
     console.log(`[MappingDetails] Fetching online puzzle solution (Depth: ${depth}, Ply: ${ply})`);
     const solutionMoves = [];

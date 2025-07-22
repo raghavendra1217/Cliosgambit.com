@@ -49,7 +49,8 @@ function CameraToggleButton() {
   // Handle keyboard shortcut C/c
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'c' || e.key === 'C') {
+      if (e.altKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault(); 
         toggleCamera();
       }
     };

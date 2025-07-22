@@ -4,5 +4,7 @@ const apiController = require('../controllers/apiController');
 
 // A single, clean endpoint to get all data for the frontend reports.
 router.get('/players/reports', apiController.getPlayerReports);
+router.put('/player/:id/attendance', apiController.updatePlayerAttendance);
 
 module.exports = router;
+
