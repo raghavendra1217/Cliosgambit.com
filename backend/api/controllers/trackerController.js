@@ -20,4 +20,15 @@ exports.updateActivityTracker = async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Database error' });
   }
+};
+
+// Add this function to fetch all players for the activity tracker
+exports.getAllPlayersForTracker = async (req, res) => {
+  try {
+    const result = await db.query('SELECT "Chess_com_ID", "Player_Name", activity_tracker FROM players ORDER BY "Player_Name" ASC');
+    res.json({ players: result.rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Database error' });
+  }
 }; 

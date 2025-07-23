@@ -8,16 +8,12 @@ const { killProcessOnPort } = require('./api/utils/portKiller');
 
 // --- Import Route Handlers ---
 const courseRoutes = require('./api/routes/courseRoutes');
-const playerReportRoutes = require('./api/routes/apiRoutes');
 const authRoutes = require('./api/routes/authRoutes'); // <-- NEW: Import auth routes
 const accessRoutes = require('./api/routes/accessRoutes'); // <-- NEW: Import access routes
 const trackerRoutes = require('./api/routes/trackerRoutes');
 const automationRoutes = require('./api/routes/automationRoutes');
 const { autoCompleteActivityTracker } = require('./api/controllers/automationController');
 
-
-// --- Import Background Service ---
-const { runDataUpdateCycle } = require('./api/services/dataOrchestrator');
 
 // --- Configuration ---
 const PORT = process.env.PORT || 10000;
@@ -33,7 +29,6 @@ app.use(express.static(frontendBuildPath));
 app.use('/api', authRoutes); // <-- NEW: Add auth routes
 app.use('/api', accessRoutes); // <-- NEW: Add access control routes
 app.use('/api', courseRoutes); // Your existing course routes
-app.use('/api', playerReportRoutes); // The new, clean player report route
 app.use(trackerRoutes);
 app.use(automationRoutes);
 

@@ -4,16 +4,26 @@ import {
     Button, Wrap, WrapItem, useToast, useColorModeValue,
     Progress,
     Stack, // Added for responsive layout
-    useBreakpointValue // Added for conditional rendering
+    useBreakpointValue, // Added for conditional rendering
 } from '@chakra-ui/react';
 import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { Chess } from 'chess.js';
 import ChessGame from './ChessGame';
+import { useAuth } from '../AppContext';
+import PollOverlay from './PollOverlay';
 
+function shuffleArray(array) {
+    // Fisher-Yates shuffle
+    const arr = array.slice();
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+}
 
 const fetchPuzzleSolution = async (initialFen, depth, ply) => {
-    console.log(`[MappingDetails] Fetching online puzzle solution (Depth: ${depth}, Ply: ${ply})`);
     const solutionMoves = [];
     const tempGame = new Chess(initialFen);
 
@@ -64,6 +74,39 @@ const fetchPuzzleSolution = async (initialFen, depth, ply) => {
     }
 };
 
+// Helper to fetch best move for a given FEN and depth
+async function fetchBestMoveAtDepth(fen, depth) {
+    const url = `https://stockfish.online/api/s/v2.php?fen=${encodeURIComponent(fen)}&depth=${depth}`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return { depth, error: `HTTP ${res.status}` };
+        const data = await res.json();
+        if (data.success && data.bestmove && typeof data.bestmove === 'string') {
+            const moveParts = data.bestmove.split(' ');
+            return { depth, move: moveParts[1] };
+        } else {
+            return { depth, error: 'No bestmove' };
+        }
+    } catch (e) {
+        return { depth, error: e.message };
+    }
+}
+
+async function fetchEvaluationAtDepth(fen, depth = 10) {
+    const url = `https://stockfish.online/api/s/v2.php?fen=${encodeURIComponent(fen)}&depth=${depth}`;
+    try {
+        const res = await fetch(url);
+        if (!res.ok) return { error: `HTTP ${res.status}` };
+        const data = await res.json();
+        if (data.success && typeof data.evaluation === 'number') {
+            return { evaluation: data.evaluation, mate: data.mate };
+        } else {
+            return { error: 'No evaluation' };
+        }
+    } catch (e) {
+        return { error: e.message };
+    }
+}
 
 function MappingDetails() {
     // --- State Hooks (Unchanged) ---
@@ -86,6 +129,9 @@ function MappingDetails() {
     const [showRatedSolution, setShowRatedSolution] = useState(false);
     const [currentFetchingFen, setCurrentFetchingFen] = useState(null);
     const [aiConfig, setAiConfig] = useState({ maxDepth: 10, minDepth: 5 });
+    const { user } = useAuth();
+    const [pollMoves, setPollMoves] = useState([]); // [{move, evaluation, isAnswer}]
+    const [showPoll, setShowPoll] = useState(false);
 
     // --- [NEW] Responsive Hook ---
     // Use 'lg' breakpoint to give the two-column layout more space
@@ -167,9 +213,12 @@ function MappingDetails() {
 
     const handleOriginalPuzzleClick = async (puzzleId) => {
         if (activeSource.id === puzzleId) return;
+        setShowPoll(false);
+        setPollMoves([]);
         setIsPuzzleLoading(true); setPuzzleAnswer(''); setShowOriginalSolution(false);
         setRatedPuzzleSolutionLine([]); setShowRatedSolution(false);
         try {
+            console.log('request sent to mapping page for the poll');
             const fenRes = await axios.get(`/api/puzzles/${puzzleId}`);
             const puzzleFen = fenRes.data?.fen_with_move;
             if (!puzzleFen) throw new Error(`Puzzle ${puzzleId} has no FEN.`);
@@ -177,9 +226,103 @@ function MappingDetails() {
             setActiveSource({ type: 'original_puzzle', id: puzzleId, fen: puzzleFen });
             const answerRes = await axios.get(`/api/puzzle-answer/${puzzleId}`);
             setPuzzleAnswer(answerRes.data.answer || "No answer available.");
+            console.log('request received for the poll');
+            if (answerRes.data.answer) {
+                try {
+                    const matchMove = answerRes.data.answer.match(/\b([a-hKQRBN][^\s]*)/i);
+                    const answerMove = matchMove ? matchMove[1] : null;
+                    const chess = new Chess(puzzleFen);
+                    const legalMoves = chess.moves();
+                    const match = legalMoves.find(m => m.toLowerCase() === (answerMove || '').toLowerCase());
+                    if (match) {
+                        const evalPromises = legalMoves.map(move => {
+                            const chessCopy = new Chess(puzzleFen);
+                            chessCopy.move(move);
+                            const newFen = chessCopy.fen();
+                            return fetchEvaluationAtDepth(newFen, 10).then(evalResult => ({
+                                move,
+                                evaluation: evalResult.evaluation,
+                                mate: evalResult.mate,
+                                error: evalResult.error
+                            })).catch(e => {
+                                console.error('Error during move evaluation:', e);
+                                return { move, evaluation: undefined };
+                            });
+                        });
+                        Promise.all(evalPromises).then(results => {
+                            try {
+                                const filtered = results.filter(r => r.evaluation !== undefined);
+                                const isWhite = chess.turn() === 'w';
+                                filtered.sort((a, b) => isWhite ? b.evaluation - a.evaluation : a.evaluation - b.evaluation);
+                                const answerEval = filtered.find(r => r.move.toLowerCase() === answerMove.toLowerCase());
+                                const topOtherMoves = filtered.filter(r => r.move.toLowerCase() !== answerMove.toLowerCase()).slice(0, 3);
+                                if (answerEval) {
+                                    let pollOptions = shuffleArray([
+                                        { move: answerEval.move, evaluation: answerEval.evaluation, isAnswer: true },
+                                        ...topOtherMoves.map(r => ({ move: r.move, evaluation: r.evaluation, isAnswer: false }))
+                                    ]);
+                                    pollOptions = pollOptions.slice(0, 4);
+                                    pollOptions.push({ move: 'None of the above', evaluation: null, isAnswer: false, isNone: true });
+                                    if (pollOptions.length === 5) {
+                                        console.log('4 moves for poll is ready');
+                                        console.log('Poll moves:', pollOptions.slice(0, 4).map(opt => opt.move));
+                                    }
+                                    setPollMoves(pollOptions);
+                                    setShowPoll(false);
+                                    if (pollOptions.length === 5) {
+                                        console.log('poll enabled !');
+                                    }
+                                } else if (match) {
+                                    // If answerEval not found but answer move is legal, include it with evaluation: null
+                                    let pollOptions = shuffleArray([
+                                        { move: match, evaluation: null, isAnswer: true },
+                                        ...topOtherMoves.map(r => ({ move: r.move, evaluation: r.evaluation, isAnswer: false }))
+                                    ]);
+                                    pollOptions = pollOptions.slice(0, 4);
+                                    pollOptions.push({ move: 'None of the above', evaluation: null, isAnswer: false, isNone: true });
+                                    if (pollOptions.length === 5) {
+                                        console.log('4 moves for poll is ready');
+                                        console.log('Poll moves:', pollOptions.slice(0, 4).map(opt => opt.move));
+                                    }
+                                    setPollMoves(pollOptions);
+                                    setShowPoll(false);
+                                    if (pollOptions.length === 5) {
+                                        console.log('poll enabled !');
+                                    }
+                                } else {
+                                    setPollMoves([]);
+                                    setShowPoll(false);
+                                    console.error('Poll error: answer move evaluation not found');
+                                }
+                            } catch (e) {
+                                setPollMoves([]);
+                                setShowPoll(false);
+                                console.error('Poll error during poll option processing:', e);
+                            }
+                        }).catch(e => {
+                            setPollMoves([]);
+                            setShowPoll(false);
+                            console.error('Poll error during Promise.all:', e);
+                        });
+                    } else {
+                        setPollMoves([]);
+                        setShowPoll(false);
+                        console.error('Poll error: answer move does not match legal moves');
+                    }
+                } catch (e) {
+                    setPollMoves([]);
+                    setShowPoll(false);
+                    console.error('Poll error during answer move extraction or matching:', e);
+                }
+            } else {
+                setPollMoves([]);
+                setShowPoll(false);
+                console.error('Poll error: no answer found');
+            }
         } catch (err) {
             toast({ title: "Error Loading Puzzle", description: err.message, status: 'error' });
             if (originalFen) { handleOriginalPositionClick(); }
+            console.error('Poll error: main try/catch', err);
         } finally { setIsPuzzleLoading(false); }
     };
 
@@ -215,7 +358,7 @@ function MappingDetails() {
         }
     }, [currentFetchingFen, toast]);
 
-    const handleRatedPuzzleClick = (ratedPuzzleObject, index) => {
+    const handleRatedPuzzleClick = async (ratedPuzzleObject, index) => {
         const fenValue = ratedPuzzleObject.Fen;
         if (!fenValue) return;
         const ratedPuzzleId = `rated-${index}-${fenValue.substring(0,10)}`;
@@ -226,6 +369,34 @@ function MappingDetails() {
         setShowRatedSolution(false); setRatedPuzzleSolutionLine([]);
         toast({ title: `Loaded GM Position ${index + 1}`, description: "Fetching analysis...", status: 'info', duration: 2000 });
         fetchBestMoveSequence(fenValue);
+        // For coach: log all possible moves and their evaluation at depth 10
+        if (user?.role === 'coach') {
+            const chess = new Chess(fenValue);
+            const moves = chess.moves();
+            const isWhite = chess.turn() === 'w';
+            const evalPromises = moves.map(move => {
+                const chessCopy = new Chess(fenValue);
+                chessCopy.move(move);
+                const newFen = chessCopy.fen();
+                return fetchEvaluationAtDepth(newFen, 10).then(evalResult => ({
+                    move,
+                    evaluation: evalResult.evaluation,
+                    mate: evalResult.mate,
+                    error: evalResult.error
+                }));
+            });
+            Promise.all(evalPromises).then(results => {
+                // Filter out moves with no evaluation
+                const filtered = results.filter(r => r.evaluation !== undefined);
+                // Sort by evaluation (best for the player to move)
+                filtered.sort((a, b) => isWhite ? b.evaluation - a.evaluation : a.evaluation - b.evaluation);
+                // Take top 4
+                const topMoves = filtered.slice(0, 4);
+                topMoves.forEach(r => {
+                    console.log(`[Coach] Move: ${r.move}, Evaluation: ${r.evaluation}`);
+                });
+            });
+        }
     };
 
     if (loading) return <Box p={8} textAlign="center"><Spinner size="xl" /></Box>;
@@ -313,7 +484,7 @@ function MappingDetails() {
                 (<Flex minH={{base: "320px", md:"480px"}} align="center" justify="center" bg="gray.100" borderRadius="md"><Spinner size="xl" /></Flex>)
                 : currentFen ? (
                     <ChessGame 
-                        key={`${activeSource.type}-${activeSource.id}-${currentFen}`} 
+                        key={`${activeSource.type}-${activeSource.id}`} 
                         initialFen={currentFen} 
                         maxDepth={aiConfig.maxDepth}
                         minDepth={aiConfig.minDepth}
@@ -325,8 +496,16 @@ function MappingDetails() {
     );
 
     return (
-        // UPDATED: Main container now fills screen width. Padding adjusted for mobile.
-        <Box px={{ base: 3, md: 8 }} py={8}>
+        <Box px={{ base: 3, md: 8 }} py={8} position="relative">
+            {/* Poll Button and Overlay */}
+            <Box position="absolute" top={4} right={4} zIndex={2000}>
+                {pollMoves.length >= 4 && !showPoll && (
+                    <Button colorScheme="purple" size="sm" onClick={() => setShowPoll(true)}>
+                        Show Poll
+                    </Button>
+                )}
+            </Box>
+            <PollOverlay pollMoves={pollMoves} showPoll={showPoll} setShowPoll={setShowPoll} />
             {isMobile ? (
                 // --- NEW MOBILE LAYOUT ---
                 // Reordered to place chessboard and solutions at the end.

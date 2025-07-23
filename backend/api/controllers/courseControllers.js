@@ -3,19 +3,6 @@
 // Import our single, unified database connection
 const db = require('../config/database');
 
-// --- Player List ---
-exports.getPlayerList = async (req, res) => {
-  // Note: Column names with uppercase letters need to be in double quotes
-  const sql = 'SELECT "Player_Name", "Chess_com_ID" FROM players';
-  try {
-    const result = await db.query(sql);
-    res.json({ players: result.rows });
-  } catch (err) {
-    console.error('Error fetching player list:', err.message);
-    res.status(500).json({ error: 'Failed to retrieve player list' });
-  }
-};
-
 // --- Stories ---
 exports.getStories = async (req, res) => {
   try {
@@ -152,21 +139,5 @@ exports.getStoriesForChapter = async (req, res) => {
     res.json(storiesResult.rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
-  }
-};
-
-// --- Player Games (for Activity Page) ---
-exports.getPlayerGames = async (req, res) => {
-  const { startDate, endDate } = req.query;
-  if (!startDate || !endDate) {
-    return res.status(400).json({ error: 'Both startDate and endDate query parameters are required.' });
-  }
-  const sql = `SELECT chess_com_id, date FROM player_games WHERE date >= $1 AND date <= $2`;
-  try {
-    const result = await db.query(sql, [startDate, endDate]);
-    res.json({ games: result.rows });
-  } catch (err) {
-    console.error('Error fetching player games:', err.message);
-    return res.status(500).json({ error: 'Failed to retrieve player games' });
   }
 };

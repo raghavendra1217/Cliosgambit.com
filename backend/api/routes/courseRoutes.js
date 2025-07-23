@@ -20,9 +20,5 @@ router.get('/3000-rated-puzzles/:principleId', controller.get3000RatedPuzzles);
 // --- Story Mapping Routes ---
 router.get('/story-mappings/:storyId', controller.getStoryMappings);
 
-// --- Player Routes ---
-router.get('/get_players', controller.getPlayerList);
-router.get('/player-games', controller.getPlayerGames);
-
 
 module.exports = router;

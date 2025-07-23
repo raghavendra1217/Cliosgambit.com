@@ -189,8 +189,23 @@ const LoginPage = () => {
         throw new Error(data.message || 'An unknown error occurred.');
       }
 
-      setMessage(data.message);
+      setMessage('Password set successfully! Logging you in...');
+      // Direct login after password set
+      const loginResponse = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chess_com_id: chessComId, password }),
+      });
+      const loginData = await loginResponse.json();
+      if (!loginResponse.ok || !loginData.token) {
+        throw new Error(loginData.message || 'Login failed after password set.');
+      }
+      login(loginData.token);
       setStep('success');
+      setMessage('Login successful! Redirecting...');
+      setTimeout(() => {
+        window.location.href = '#/';
+      }, 1500);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -232,6 +247,15 @@ const LoginPage = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (step === 'success') {
+      const timer = setTimeout(() => {
+        navigate('/login', { replace: true });
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [step, navigate]);
 
   return (
     <Center minH="calc(100vh - 80px)" px={4}>

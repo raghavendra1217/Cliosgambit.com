@@ -118,9 +118,6 @@ function NavBar() {
           {/* ADMIN NAVIGATION - Show admin-specific links */}
           {isAuthenticated && user?.role === 'admin' && (
             <>
-              <Link as={RouterLink} to="/api/players" color={textColor} fontWeight="medium" _hover={{ color: 'teal.500', textDecoration: 'none' }}>
-                Playrs
-              </Link>
               <Link as={RouterLink} to="/api/access-control" color={textColor} fontWeight="medium" _hover={{ color: 'teal.500', textDecoration: 'none' }}>
                 Acx_Ctrl
               </Link>
@@ -176,9 +173,6 @@ function NavBar() {
               {/* ADMIN MENU ITEMS - Show admin-specific links */}
               {isAuthenticated && user?.role === 'admin' && (
                 <>
-                  <MenuItem as={RouterLink} to="/api/players">
-                    Playrs
-                  </MenuItem>
                   <MenuItem as={RouterLink} to="/api/access-control">
                     Acx_Ctrl
                   </MenuItem>
